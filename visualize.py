@@ -69,7 +69,8 @@ def assign_tier_colors(roots: list) -> dict:
 
 
 def tree_to_json(roots: list, tier_colors: dict) -> list:
-    """Convert Python tree + tier colors into a JSON-serializable structure."""
+    """Convert Python tree + tier colors into a JSON-serializable structure.
+    Groups L1 roots under tier wrapper nodes."""
     counter = [0]
 
     def convert(node, color=""):
@@ -82,14 +83,36 @@ def tree_to_json(roots: list, tier_colors: dict) -> list:
             "source": node["source"],
             "tier": node["tier"],
             "color": color,
-            "children": [convert(c) for c in node["children"]],
+            "isTier": False,
+            "children": [convert(c, color) for c in node["children"]],
         }
 
-    result = []
+    # Group roots by tier
+    tier_groups: dict[str, list] = {}
+    tier_order: list[str] = []
     for root in roots:
         tier = root["tier"] or root["name"]
+        if tier not in tier_groups:
+            tier_groups[tier] = []
+            tier_order.append(tier)
+        tier_groups[tier].append(root)
+
+    result = []
+    for tier in tier_order:
         color = tier_colors.get(tier, TIER_COLORS[0])
-        result.append(convert(root, color))
+        counter[0] += 1
+        tier_node = {
+            "id": f"node-{counter[0]}",
+            "name": tier,
+            "desc": "",
+            "type": "Tier",
+            "source": "",
+            "tier": tier,
+            "color": color,
+            "isTier": True,
+            "children": [convert(root, color) for root in tier_groups[tier]],
+        }
+        result.append(tier_node)
     return result
 
 
@@ -367,10 +390,10 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     var DATA = {json_blob};
 
     /* ---- Constants ---- */
-    var LEVEL_WIDTH = 280;
-    var NODE_W = 200;
+    var NODE_W = 180;
     var NODE_H = 36;
-    var NODE_SPACING = 52;
+    var LEVEL_HEIGHT = 90;
+    var NODE_GAP_X = 20;
     var TOGGLE_R = 9;
     var PAD_TOP = 40;
     var PAD_LEFT = 40;
@@ -378,21 +401,38 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     /* ---- Flat index & parent map ---- */
     var nodeMap = {{}};
     var parentMap = {{}};
-    function indexNodes(nodes, pid) {{
+    function indexNodes(nodes, pid, depth) {{
       for (var i = 0; i < nodes.length; i++) {{
         var n = nodes[i];
         nodeMap[n.id] = n;
         if (pid) parentMap[n.id] = pid;
         n._collapsed = true;
+        n._depth = depth;
         n._x = 0;
         n._y = 0;
         n._visible = true;
-        indexNodes(n.children, n.id);
+        indexNodes(n.children, n.id, depth + 1);
       }}
     }}
-    indexNodes(DATA, null);
+    indexNodes(DATA, null, 0);
 
     /* All roots collapsed by default — show only tier 1 */
+
+    /* Level color palette: [fill, stroke, textColor] per depth */
+    var LEVEL_COLORS = [
+      ["#002855", "#002855", "#ffffff"],  /* Depth 0: Tier — dark navy */
+      ["#0079C1", "#0079C1", "#ffffff"],  /* Depth 1: L1 — blue */
+      ["#007A5E", "#007A5E", "#ffffff"],  /* Depth 2: L2 — teal */
+      ["#6B2D8B", "#6B2D8B", "#ffffff"],  /* Depth 3: L3 — purple */
+      ["#F0A500", "#F0A500", "#ffffff"],  /* Depth 4: L4 — amber */
+      ["#ED1C24", "#ED1C24", "#ffffff"],  /* Depth 5: L5 — red */
+      ["#00A3E0", "#00A3E0", "#ffffff"],  /* Depth 6: L6 — sky blue */
+      ["#5E8AB4", "#5E8AB4", "#ffffff"],  /* Depth 7: L7 — steel */
+    ];
+
+    function getLevelColor(depth) {{
+      return LEVEL_COLORS[depth % LEVEL_COLORS.length];
+    }}
 
     /* Tier color lookup */
     function getTierColor(node) {{
@@ -433,31 +473,33 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     }}
     applyTransform();
 
-    /* ---- Layout algorithm ---- */
-    var leafY = 0;
+    /* ---- Layout algorithm (top-down) ---- */
+    var leafX = 0;
 
+    /* Returns the width this subtree occupies */
     function layoutNode(node, depth) {{
-      node._x = depth * LEVEL_WIDTH;
+      node._y = depth * LEVEL_HEIGHT;
       node._visible = true;
 
       if (node.children.length === 0 || node._collapsed) {{
-        node._y = leafY;
-        leafY += NODE_SPACING;
-        /* Hide collapsed children */
+        node._x = leafX;
+        leafX += NODE_W + NODE_GAP_X;
         if (node._collapsed) {{
           hideSubtree(node);
         }}
         return;
       }}
 
+      var startX = leafX;
       for (var i = 0; i < node.children.length; i++) {{
         layoutNode(node.children[i], depth + 1);
       }}
+      var endX = leafX - NODE_GAP_X;
 
       /* Parent centers over children */
-      var firstY = node.children[0]._y;
-      var lastY = node.children[node.children.length - 1]._y;
-      node._y = (firstY + lastY) / 2;
+      var firstX = node.children[0]._x;
+      var lastX = node.children[node.children.length - 1]._x;
+      node._x = (firstX + lastX) / 2;
     }}
 
     function hideSubtree(node) {{
@@ -468,7 +510,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     }}
 
     function doLayout() {{
-      leafY = 0;
+      leafX = 0;
       for (var i = 0; i < DATA.length; i++) {{
         layoutNode(DATA[i], 0);
       }}
@@ -495,49 +537,45 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       g.setAttribute("class", "node-group");
       g.setAttribute("data-id", node.id);
 
+      var lc = getLevelColor(node._depth);
       var rect = document.createElementNS(ns, "rect");
       rect.setAttribute("class", "node-rect");
       rect.setAttribute("width", NODE_W);
       rect.setAttribute("height", NODE_H);
       rect.setAttribute("rx", 6);
       rect.setAttribute("ry", 6);
-      if (isRoot && node.color) {{
-        rect.setAttribute("fill", node.color);
-        rect.setAttribute("stroke", node.color);
-      }} else {{
-        rect.setAttribute("fill", "#fff");
-        rect.setAttribute("stroke", "#B0C4D8");
-      }}
+      rect.setAttribute("fill", lc[0]);
+      rect.setAttribute("stroke", lc[1]);
       g.appendChild(rect);
 
       /* Text via foreignObject for ellipsis */
       var fo = document.createElementNS(ns, "foreignObject");
       fo.setAttribute("x", 10);
       fo.setAttribute("y", 2);
-      fo.setAttribute("width", NODE_W - 20 - (node.children.length > 0 ? 20 : 0));
+      fo.setAttribute("width", NODE_W - 20);
       fo.setAttribute("height", NODE_H - 4);
       var textDiv = document.createElement("div");
-      textDiv.style.cssText = "font-size:13px;font-weight:" + (isRoot ? "700" : "500") +
-        ";color:" + (isRoot && node.color ? "#fff" : "#002855") +
+      textDiv.style.cssText = "font-size:13px;font-weight:" + (node._depth <= 1 ? "700" : "500") +
+        ";color:" + lc[2] +
         ";line-height:" + NODE_H + "px;height:" + NODE_H +
-        "px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;";
+        "px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;text-align:center;";
       textDiv.textContent = node.name;
       fo.appendChild(textDiv);
       g.appendChild(fo);
 
-      /* Toggle indicator */
+      /* Toggle indicator (below node) */
       if (node.children.length > 0) {{
         var tc = document.createElementNS(ns, "circle");
         tc.setAttribute("class", "toggle-circle");
-        tc.setAttribute("cx", NODE_W + TOGGLE_R + 4);
-        tc.setAttribute("cy", NODE_H / 2);
+        tc.setAttribute("cx", NODE_W / 2);
+        tc.setAttribute("cy", NODE_H + TOGGLE_R + 4);
         tc.setAttribute("r", TOGGLE_R);
         g.appendChild(tc);
 
         var tt = document.createElementNS(ns, "text");
         tt.setAttribute("class", "toggle-text");
-        tt.setAttribute("x", NODE_W + TOGGLE_R + 4);
-        tt.setAttribute("y", NODE_H / 2);
+        tt.setAttribute("x", NODE_W / 2);
+        tt.setAttribute("y", NODE_H + TOGGLE_R + 4);
         tt.textContent = node._collapsed ? "+" : "\u2212";
         g.appendChild(tt);
 
@@ -625,15 +663,15 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
         }}
         path.style.opacity = "";
 
-        var x1 = parent._x + NODE_W + TOGGLE_R * 2 + 8;
-        var y1 = parent._y + NODE_H / 2;
-        var x2 = child._x;
-        var y2 = child._y + NODE_H / 2;
-        var cpx = (x1 + x2) / 2;
+        var x1 = parent._x + NODE_W / 2;
+        var y1 = parent._y + NODE_H + TOGGLE_R * 2 + 8;
+        var x2 = child._x + NODE_W / 2;
+        var y2 = child._y;
+        var cpy = (y1 + y2) / 2;
         path.setAttribute("d",
           "M" + x1 + "," + y1 +
-          " C" + cpx + "," + y1 +
-          " " + cpx + "," + y2 +
+          " C" + x1 + "," + cpy +
+          " " + x2 + "," + cpy +
           " " + x2 + "," + y2);
       }}
     }}
@@ -722,7 +760,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
 
       /* Position popup near node */
       var svgRect = svgEl.getBoundingClientRect();
-      var screenX = (node._x + NODE_W + 30) * zoom + panX + svgRect.left;
+      var screenX = (node._x + NODE_W + 20) * zoom + panX + svgRect.left;
       var screenY = node._y * zoom + panY + svgRect.top;
 
       /* Keep within viewport */

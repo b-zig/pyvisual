@@ -806,7 +806,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
 
     /* ---- Center / Reset View ---- */
     function centerView() {{
-      var svgRect = svg.getBoundingClientRect();
+      var svgRect = svgEl.getBoundingClientRect();
       /* Find bounding box of visible nodes */
       var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       var ids = Object.keys(nodeMap);
@@ -819,19 +819,26 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
         if (n._y + NODE_H > maxY) maxY = n._y + NODE_H;
       }}
       if (minX === Infinity) return;
-      var contentW = maxX - minX;
-      var contentH = maxY - minY;
-      var cx = minX + contentW / 2;
-      var cy = minY + contentH / 2;
-      zoom = 1;
+      var pad = 40;
+      var contentW = maxX - minX + pad * 2;
+      var contentH = maxY - minY + pad * 2;
+      var cx = minX - pad + contentW / 2;
+      var cy = minY - pad + contentH / 2;
+      var scaleX = svgRect.width / contentW;
+      var scaleY = svgRect.height / contentH;
+      zoom = Math.min(scaleX, scaleY, 1);
+      if (zoom < 0.1) zoom = 0.1;
       panX = svgRect.width / 2 - cx * zoom;
       panY = svgRect.height / 2 - cy * zoom;
       applyTransform();
     }}
 
     function resetView() {{
-      centerView();
+      collapseAll();
       hidePopup();
+      requestAnimationFrame(function() {{
+        centerView();
+      }});
     }}
 
     /* ---- Search ---- */
@@ -940,7 +947,10 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     buildSvgElements(DATA, true);
     doLayout();
     updatePositions();
-    centerView();
+    /* Defer centering until browser has laid out the SVG */
+    requestAnimationFrame(function() {{
+      centerView();
+    }});
   </script>
 </body>
 </html>"""

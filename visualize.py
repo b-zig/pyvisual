@@ -392,10 +392,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     }}
     indexNodes(DATA, null);
 
-    /* L1 roots expanded by default */
-    for (var i = 0; i < DATA.length; i++) {{
-      DATA[i]._collapsed = false;
-    }}
+    /* All roots collapsed by default — show only tier 1 */
 
     /* Tier color lookup */
     function getTierColor(node) {{
@@ -664,13 +661,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     function collapseAll() {{
       var ids = Object.keys(nodeMap);
       for (var i = 0; i < ids.length; i++) {{
-        var n = nodeMap[ids[i]];
-        /* Roots stay expanded, everything else collapses */
-        if (parentMap[ids[i]]) {{
-          n._collapsed = true;
-        }} else {{
-          n._collapsed = false;
-        }}
+        nodeMap[ids[i]]._collapsed = true;
       }}
       hidePopup();
       doLayout();
@@ -813,12 +804,33 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       }}
     }});
 
-    /* ---- Reset View ---- */
-    function resetView() {{
-      panX = PAD_LEFT;
-      panY = PAD_TOP;
+    /* ---- Center / Reset View ---- */
+    function centerView() {{
+      var svgRect = svg.getBoundingClientRect();
+      /* Find bounding box of visible nodes */
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      var ids = Object.keys(nodeMap);
+      for (var i = 0; i < ids.length; i++) {{
+        var n = nodeMap[ids[i]];
+        if (!n._visible) continue;
+        if (n._x < minX) minX = n._x;
+        if (n._y < minY) minY = n._y;
+        if (n._x + NODE_W > maxX) maxX = n._x + NODE_W;
+        if (n._y + NODE_H > maxY) maxY = n._y + NODE_H;
+      }}
+      if (minX === Infinity) return;
+      var contentW = maxX - minX;
+      var contentH = maxY - minY;
+      var cx = minX + contentW / 2;
+      var cy = minY + contentH / 2;
       zoom = 1;
+      panX = svgRect.width / 2 - cx * zoom;
+      panY = svgRect.height / 2 - cy * zoom;
       applyTransform();
+    }}
+
+    function resetView() {{
+      centerView();
       hidePopup();
     }}
 
@@ -906,7 +918,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       searchCount.textContent = "";
       searchActive = false;
 
-      /* Remove all search classes */
+      /* Remove all search classes but keep current view and collapse state */
       var allIds = Object.keys(svgNodes);
       for (var i = 0; i < allIds.length; i++) {{
         svgNodes[allIds[i]].classList.remove("search-match", "search-dim");
@@ -915,9 +927,6 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       for (var i = 0; i < linkIds.length; i++) {{
         svgLinks[linkIds[i]].classList.remove("search-dim");
       }}
-
-      /* Reset collapse state: roots expanded, rest collapsed */
-      collapseAll();
     }}
 
     /* ---- Wire up buttons ---- */
@@ -931,6 +940,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     buildSvgElements(DATA, true);
     doLayout();
     updatePositions();
+    centerView();
   </script>
 </body>
 </html>"""

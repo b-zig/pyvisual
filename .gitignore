@@ -1,0 +1,4 @@
+output.html
+sample_capabilities.xlsx
+*.xlsx
+__pycache__/

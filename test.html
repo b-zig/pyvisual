@@ -1,112 +1,12 @@
-"""Business capability model visualizer.
-
-Usage:
-    python visualize.py <input.xlsx> [--output output.html]
-"""
-import argparse
-import html
-import json
-import sys
-import pandas as pd
-
-# BMO-aligned tier colors
-TIER_COLORS = [
-    "#0079C1", "#002855", "#ED1C24", "#007A5E",
-    "#6B2D8B", "#F0A500", "#00A3E0", "#5E8AB4",
-]
-
-
-def load_data(path: str) -> pd.DataFrame:
-    df = pd.read_excel(path)
-    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
-    required = {"capability_id", "capability_name", "capability_parent_id"}
-    missing = required - set(df.columns)
-    if missing:
-        print(f"ERROR: Missing required columns: {missing}", file=sys.stderr)
-        sys.exit(1)
-    df["capability_id"] = df["capability_id"].astype(str).str.strip()
-    df["capability_parent_id"] = df["capability_parent_id"].fillna("").astype(str).str.strip()
-    for col in ("capability_description", "capability_type", "source", "tier"):
-        if col not in df.columns:
-            df[col] = ""
-        else:
-            df[col] = df[col].fillna("")
-    return df
-
-
-def build_tree(df: pd.DataFrame) -> tuple[list, dict]:
-    nodes = {}
-    for _, row in df.iterrows():
-        nodes[row["capability_id"]] = {
-            "name": row["capability_name"],
-            "desc": str(row["capability_description"]).strip(),
-            "type": str(row["capability_type"]).strip(),
-            "source": str(row["source"]).strip(),
-            "tier": str(row["tier"]).strip(),
-            "children": [],
-        }
-    roots = []
-    for _, row in df.iterrows():
-        pid = row["capability_parent_id"]
-        if pid == "" or pid == "nan":
-            roots.append(nodes[row["capability_id"]])
-        elif pid in nodes:
-            nodes[pid]["children"].append(nodes[row["capability_id"]])
-        else:
-            print(f"WARNING: parent_id '{pid}' not found for '{row['capability_name']}'", file=sys.stderr)
-    return roots, nodes
-
-
-def assign_tier_colors(roots: list) -> dict:
-    tier_map = {}
-    color_idx = 0
-    for root in roots:
-        tier = root["tier"] or root["name"]
-        if tier not in tier_map:
-            tier_map[tier] = TIER_COLORS[color_idx % len(TIER_COLORS)]
-            color_idx += 1
-    return tier_map
-
-
-def tree_to_json(roots: list, tier_colors: dict) -> list:
-    """Convert Python tree + tier colors into a JSON-serializable structure."""
-    counter = [0]
-
-    def convert(node, color=""):
-        counter[0] += 1
-        return {
-            "id": f"node-{counter[0]}",
-            "name": node["name"],
-            "desc": node["desc"],
-            "type": node["type"],
-            "source": node["source"],
-            "tier": node["tier"],
-            "color": color,
-            "children": [convert(c) for c in node["children"]],
-        }
-
-    result = []
-    for root in roots:
-        tier = root["tier"] or root["name"]
-        color = tier_colors.get(tier, TIER_COLORS[0])
-        result.append(convert(root, color))
-    return result
-
-
-def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
-    tree_data = tree_to_json(roots, tier_colors)
-    json_blob = json.dumps(tree_data, ensure_ascii=False)
-    safe_source = html.escape(source_file)
-
-    return f"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Business Capability Model</title>
   <style>
-    *, *::before, *::after {{ box-sizing: border-box; }}
-    body {{
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #F2F4F7;
       color: #002855;
@@ -115,8 +15,8 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
-    }}
-    header {{
+    }
+    header {
       background: #002855;
       color: #fff;
       padding: 14px 24px;
@@ -125,26 +25,26 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       gap: 16px;
       flex-wrap: wrap;
       flex-shrink: 0;
-    }}
-    header h1 {{
+    }
+    header h1 {
       font-size: 1.3rem;
       font-weight: 700;
       margin: 0;
       color: #fff;
       letter-spacing: 0.01em;
-    }}
-    header .subtitle {{
+    }
+    header .subtitle {
       font-size: 0.82rem;
       color: #90AFCC;
       margin: 0;
-    }}
-    .toolbar {{
+    }
+    .toolbar {
       display: flex;
       align-items: center;
       gap: 10px;
       margin-left: auto;
-    }}
-    #search {{
+    }
+    #search {
       width: 280px;
       padding: 7px 12px 7px 34px;
       border: 2px solid rgba(255,255,255,0.2);
@@ -154,10 +54,10 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       background: rgba(255,255,255,0.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7' stroke='%2390AFCC' stroke-width='2'/%3E%3Cline x1='16.5' y1='16.5' x2='21' y2='21' stroke='%2390AFCC' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat 10px center;
       outline: none;
       transition: border-color 0.15s;
-    }}
-    #search::placeholder {{ color: #90AFCC; }}
-    #search:focus {{ border-color: #0079C1; background-color: rgba(255,255,255,0.15); }}
-    .toolbar button {{
+    }
+    #search::placeholder { color: #90AFCC; }
+    #search:focus { border-color: #0079C1; background-color: rgba(255,255,255,0.15); }
+    .toolbar button {
       padding: 6px 14px;
       border: 1px solid rgba(255,255,255,0.25);
       border-radius: 6px;
@@ -167,44 +67,44 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       color: #fff;
       background: rgba(255,255,255,0.08);
       transition: background 0.15s;
-    }}
-    .toolbar button:hover {{ background: rgba(255,255,255,0.18); }}
-    #search-clear {{
+    }
+    .toolbar button:hover { background: rgba(255,255,255,0.18); }
+    #search-clear {
       display: none;
       background: #ED1C24;
       border-color: #ED1C24;
-    }}
-    #search-clear:hover {{ background: #c0151b; }}
-    #search-count {{
+    }
+    #search-clear:hover { background: #c0151b; }
+    #search-count {
       font-size: 0.8rem;
       color: #90AFCC;
-    }}
-    .container {{
+    }
+    .container {
       display: grid;
       grid-template-columns: 1fr 2fr;
       flex: 1;
       overflow: hidden;
       min-height: 0;
-    }}
-    #tree-pane {{
+    }
+    #tree-pane {
       overflow-y: auto;
       padding: 16px;
       border-right: 1px solid #DCE8F2;
       background: #fff;
-    }}
-    #detail-pane {{
+    }
+    #detail-pane {
       overflow-y: auto;
       padding: 24px 32px;
       background: #F2F4F7;
-    }}
+    }
 
     /* Tree nodes */
-    .node {{
+    .node {
       margin: 2px 0;
       padding: 0;
       border-radius: 5px;
-    }}
-    .node > summary {{
+    }
+    .node > summary {
       cursor: pointer;
       padding: 7px 10px;
       font-weight: 600;
@@ -216,47 +116,47 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       user-select: none;
       border-radius: 5px;
       transition: background 0.1s;
-    }}
-    .node > summary:hover {{ background: #EEF5FB; }}
-    .node > summary::before {{
-      content: "\\25B6";
+    }
+    .node > summary:hover { background: #EEF5FB; }
+    .node > summary::before {
+      content: "\25B6";
       font-size: 0.6rem;
       color: #0079C1;
       transition: transform 0.15s;
       flex-shrink: 0;
-    }}
-    .node[open] > summary::before {{ transform: rotate(90deg); }}
-    .node .node {{
+    }
+    .node[open] > summary::before { transform: rotate(90deg); }
+    .node .node {
       margin-left: 18px;
-    }}
-    .node .node > summary {{
+    }
+    .node .node > summary {
       font-weight: 500;
       font-size: 0.87rem;
-    }}
-    .node .node .node > summary {{
+    }
+    .node .node .node > summary {
       font-weight: 400;
       color: #3A5570;
       font-size: 0.84rem;
-    }}
-    .node.active > summary {{
+    }
+    .node.active > summary {
       background: #D6EEFF;
-    }}
-    .node.search-hidden {{ display: none; }}
-    .node.search-match > summary {{ background: #FFF3CD; }}
+    }
+    .node.search-hidden { display: none; }
+    .node.search-match > summary { background: #FFF3CD; }
 
     /* Detail card */
-    .detail-card {{
+    .detail-card {
       background: #fff;
       border-radius: 10px;
       padding: 28px 32px;
       box-shadow: 0 2px 8px rgba(0,40,85,0.08);
-    }}
-    .detail-card h2 {{
+    }
+    .detail-card h2 {
       margin: 0 0 4px;
       font-size: 1.35rem;
       color: #002855;
-    }}
-    .detail-badge {{
+    }
+    .detail-badge {
       display: inline-block;
       font-size: 0.75rem;
       font-weight: 600;
@@ -265,8 +165,8 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       padding: 3px 10px;
       border-radius: 10px;
       margin-bottom: 16px;
-    }}
-    .detail-tier {{
+    }
+    .detail-tier {
       display: inline-block;
       font-size: 0.75rem;
       font-weight: 600;
@@ -275,75 +175,75 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       margin-left: 6px;
       margin-bottom: 16px;
       color: #fff;
-    }}
-    .detail-section {{
+    }
+    .detail-section {
       margin-top: 16px;
-    }}
-    .detail-section h3 {{
+    }
+    .detail-section h3 {
       font-size: 0.78rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: #7A96B0;
       margin: 0 0 6px;
-    }}
-    .detail-section p {{
+    }
+    .detail-section p {
       margin: 0;
       font-size: 0.92rem;
       color: #3A5570;
       line-height: 1.55;
-    }}
-    .children-list {{
+    }
+    .children-list {
       list-style: none;
       padding: 0;
       margin: 0;
-    }}
-    .children-list li {{
+    }
+    .children-list li {
       padding: 5px 0;
-    }}
-    .children-list a {{
+    }
+    .children-list a {
       color: #0079C1;
       text-decoration: none;
       font-size: 0.9rem;
       cursor: pointer;
-    }}
-    .children-list a:hover {{ text-decoration: underline; }}
-    .empty-state {{
+    }
+    .children-list a:hover { text-decoration: underline; }
+    .empty-state {
       color: #7A96B0;
       font-size: 0.95rem;
       text-align: center;
       padding: 80px 20px;
-    }}
-    .no-results {{
+    }
+    .no-results {
       color: #7A96B0;
       font-size: 0.9rem;
       padding: 12px 4px;
       display: none;
-    }}
+    }
 
-    @media (max-width: 768px) {{
-      .container {{
+    @media (max-width: 768px) {
+      .container {
         grid-template-columns: 1fr;
         grid-template-rows: 1fr 1fr;
-      }}
-      #tree-pane {{
+      }
+      #tree-pane {
         border-right: none;
         border-bottom: 1px solid #DCE8F2;
-      }}
-      .toolbar {{
+      }
+      .toolbar {
         width: 100%;
-      }}
-      #search {{
+      }
+      #search {
         flex: 1;
-      }}
-    }}
+      }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Business Capability Model</h1>
-    <p class="subtitle">Source: {safe_source}</p>
+    <p class="subtitle">Source: sample_capabilities.xlsx</p>
     <div class="toolbar">
-      <input id="search" type="search" placeholder="Search capabilities\u2026" autocomplete="off" />
+      <input id="search" type="search" placeholder="Search capabilities…" autocomplete="off" />
       <button id="search-clear" onclick="clearSearch()">Clear</button>
       <span id="search-count"></span>
       <button onclick="expandAll()">Expand All</button>
@@ -360,31 +260,31 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
   <div class="no-results" id="no-results">No capabilities matched your search.</div>
 
   <script>
-    const DATA = {json_blob};
+    const DATA = [{"id": "node-1", "name": "Finance", "desc": "All financial management capabilities", "type": "Domain", "source": "Internal", "tier": "Corporate", "color": "#0079C1", "children": [{"id": "node-2", "name": "Budgeting", "desc": "Planning and managing budgets", "type": "Function", "source": "Finance Dept", "tier": "Corporate", "color": "", "children": [{"id": "node-3", "name": "Budget Planning", "desc": "Defining annual budget targets", "type": "Activity", "source": "Finance Dept", "tier": "Corporate", "color": "", "children": []}, {"id": "node-4", "name": "Budget Tracking", "desc": "Monitoring spend against approved budgets", "type": "Activity", "source": "Finance Dept", "tier": "Corporate", "color": "", "children": []}]}, {"id": "node-5", "name": "Financial Reporting", "desc": "Producing financial statements and reports", "type": "Function", "source": "Finance Dept", "tier": "Corporate", "color": "", "children": []}, {"id": "node-6", "name": "Accounts Payable", "desc": "Managing outgoing payments to vendors", "type": "Function", "source": "Finance Dept", "tier": "Corporate", "color": "", "children": []}]}, {"id": "node-7", "name": "Operations", "desc": "Core operational delivery capabilities", "type": "Domain", "source": "Internal", "tier": "Business", "color": "#002855", "children": [{"id": "node-8", "name": "Supply Chain", "desc": "Managing the flow of goods and materials", "type": "Function", "source": "Ops Dept", "tier": "Business", "color": "", "children": [{"id": "node-9", "name": "Procurement", "desc": "Sourcing and purchasing goods and services", "type": "Activity", "source": "Ops Dept", "tier": "Business", "color": "", "children": []}, {"id": "node-10", "name": "Inventory Management", "desc": "Tracking and controlling stock levels", "type": "Activity", "source": "Ops Dept", "tier": "Business", "color": "", "children": []}]}, {"id": "node-11", "name": "Quality Management", "desc": "Ensuring products and services meet standards", "type": "Function", "source": "Ops Dept", "tier": "Business", "color": "", "children": []}]}, {"id": "node-12", "name": "Human Resources", "desc": "People management and development capabilities", "type": "Domain", "source": "Internal", "tier": "Corporate", "color": "#0079C1", "children": [{"id": "node-13", "name": "Talent Acquisition", "desc": "Recruiting and onboarding new employees", "type": "Function", "source": "HR Dept", "tier": "Corporate", "color": "", "children": [{"id": "node-14", "name": "Job Posting", "desc": "Advertising open positions across channels", "type": "Activity", "source": "HR Dept", "tier": "Corporate", "color": "", "children": []}, {"id": "node-15", "name": "Candidate Screening", "desc": "Reviewing and shortlisting applicants", "type": "Activity", "source": "HR Dept", "tier": "Corporate", "color": "", "children": []}]}, {"id": "node-16", "name": "Learning & Development", "desc": "Training and growing employee skills", "type": "Function", "source": "HR Dept", "tier": "Corporate", "color": "", "children": []}]}];
 
     // Build a flat lookup: id -> node data
-    const nodeMap = {{}};
-    function indexNodes(nodes) {{
-      for (const n of nodes) {{
+    const nodeMap = {};
+    function indexNodes(nodes) {
+      for (const n of nodes) {
         nodeMap[n.id] = n;
         indexNodes(n.children);
-      }}
-    }}
+      }
+    }
     indexNodes(DATA);
 
     // Find the tier color for any node by walking up
-    function getTierColor(node) {{
+    function getTierColor(node) {
       if (node.color) return node.color;
       // Walk all roots to find the color in the ancestor chain
-      for (const root of DATA) {{
+      for (const root of DATA) {
         if (findInTree(root, node.id)) return root.color;
-      }}
+      }
       return "";
-    }}
-    function findInTree(node, id) {{
+    }
+    function findInTree(node, id) {
       if (node.id === id) return true;
       return node.children.some(c => findInTree(c, id));
-    }}
+    }
 
     const treePane = document.getElementById('tree-pane');
     const detailPane = document.getElementById('detail-pane');
@@ -396,49 +296,49 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     let activeId = null;
 
     // --- Render tree ---
-    function renderTree(nodes, container, isRoot) {{
-      for (const node of nodes) {{
+    function renderTree(nodes, container, isRoot) {
+      for (const node of nodes) {
         const details = document.createElement('details');
         details.className = 'node';
         details.id = 'tree-' + node.id;
         details.dataset.name = node.name;
         details.dataset.nodeId = node.id;
-        if (isRoot) {{
+        if (isRoot) {
           details.open = true;
-          if (node.color) {{
+          if (node.color) {
             details.style.borderLeft = '4px solid ' + node.color;
-          }}
-        }}
+          }
+        }
         const summary = document.createElement('summary');
         const label = document.createElement('span');
         label.className = 'node-label';
         label.textContent = node.name;
         summary.appendChild(label);
-        summary.addEventListener('click', function(e) {{
+        summary.addEventListener('click', function(e) {
           // Don't prevent the default toggle, just select the node
           selectNode(node.id);
-        }});
+        });
         details.appendChild(summary);
-        if (node.children.length) {{
+        if (node.children.length) {
           renderTree(node.children, details, false);
-        }}
+        }
         container.appendChild(details);
-      }}
-    }}
+      }
+    }
 
     renderTree(DATA, treePane, true);
 
     // --- Select node ---
-    function selectNode(id) {{
+    function selectNode(id) {
       // Remove previous active
       const prev = treePane.querySelector('.node.active');
       if (prev) prev.classList.remove('active');
 
       activeId = id;
       const treeEl = document.getElementById('tree-' + id);
-      if (treeEl) {{
+      if (treeEl) {
         treeEl.classList.add('active');
-      }}
+      }
 
       const node = nodeMap[id];
       if (!node) return;
@@ -450,167 +350,140 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       html += '<h2>' + escapeHtml(node.name) + '</h2>';
 
       // Badges row
-      if (node.type || tierName) {{
-        if (node.type) {{
+      if (node.type || tierName) {
+        if (node.type) {
           html += '<span class="detail-badge">' + escapeHtml(node.type) + '</span>';
-        }}
-        if (tierName) {{
+        }
+        if (tierName) {
           html += '<span class="detail-tier" style="background:' + (tierColor || '#5E7A96') + '">' + escapeHtml(tierName) + '</span>';
-        }}
-      }}
+        }
+      }
 
-      if (node.desc) {{
+      if (node.desc) {
         html += '<div class="detail-section"><h3>Description</h3><p>' + escapeHtml(node.desc) + '</p></div>';
-      }}
-      if (node.source) {{
+      }
+      if (node.source) {
         html += '<div class="detail-section"><h3>Source</h3><p>' + escapeHtml(node.source) + '</p></div>';
-      }}
-      if (node.children.length) {{
+      }
+      if (node.children.length) {
         html += '<div class="detail-section"><h3>Children (' + node.children.length + ')</h3><ul class="children-list">';
-        for (const child of node.children) {{
-          html += '<li><a class="child-link" data-id="' + child.id + '">' + escapeHtml(child.name) + '</a></li>';
-        }}
+        for (const child of node.children) {
+          html += '<li><a onclick="navigateToNode('' + child.id + '')">' + escapeHtml(child.name) + '</a></li>';
+        }
         html += '</ul></div>';
-      }}
+      }
       html += '</div>';
       detailPane.innerHTML = html;
-      // Bind child link clicks via delegation
-      detailPane.querySelectorAll('.child-link').forEach(function(a) {{
-        a.addEventListener('click', function() {{
-          navigateToNode(a.dataset.id);
-        }});
-      }});
-    }}
+    }
 
-    function escapeHtml(s) {{
+    function escapeHtml(s) {
       const div = document.createElement('div');
       div.textContent = s;
       return div.innerHTML;
-    }}
+    }
 
     // --- Navigate to node (from detail pane child links) ---
-    function navigateToNode(id) {{
+    function navigateToNode(id) {
       // Expand parent chain
       const treeEl = document.getElementById('tree-' + id);
-      if (treeEl) {{
+      if (treeEl) {
         let parent = treeEl.parentElement;
-        while (parent && parent !== treePane) {{
-          if (parent.tagName === 'DETAILS') {{
+        while (parent && parent !== treePane) {
+          if (parent.tagName === 'DETAILS') {
             parent.open = true;
-          }}
+          }
           parent = parent.parentElement;
-        }}
+        }
         selectNode(id);
-        treeEl.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
-      }}
-    }}
+        treeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
 
     // --- Expand / Collapse ---
-    function expandAll() {{
+    function expandAll() {
       treePane.querySelectorAll('details.node').forEach(el => el.open = true);
-    }}
-    function collapseAll() {{
-      treePane.querySelectorAll('details.node').forEach(el => {{
+    }
+    function collapseAll() {
+      treePane.querySelectorAll('details.node').forEach(el => {
         // Keep roots open if they are direct children of tree-pane
         el.open = el.parentElement === treePane;
-      }});
-    }}
+      });
+    }
 
     // --- Search ---
     // Store original open state
     const originalOpen = new Map();
-    treePane.querySelectorAll('details.node').forEach(el => {{
+    treePane.querySelectorAll('details.node').forEach(el => {
       originalOpen.set(el.id, el.open);
-    }});
+    });
 
-    function applySearch(el, query) {{
+    function applySearch(el, query) {
       const name = (el.dataset.name || '').toLowerCase();
       const selfMatch = name.includes(query);
       const directChildren = Array.from(el.children).filter(c => c.tagName === 'DETAILS');
       let childMatch = false;
-      for (const child of directChildren) {{
+      for (const child of directChildren) {
         if (applySearch(child, query)) childMatch = true;
-      }}
+      }
       const visible = selfMatch || childMatch;
       el.classList.toggle('search-hidden', !visible);
       el.classList.toggle('search-match', selfMatch);
       // Reset label
       const label = el.querySelector(':scope > summary > .node-label');
-      if (label) {{
+      if (label) {
         label.innerHTML = label.textContent;
-        if (selfMatch) {{
+        if (selfMatch) {
           const text = label.textContent;
-          const re = new RegExp('(' + query.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&') + ')', 'gi');
+          const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
           label.innerHTML = text.replace(re, '<mark>$1</mark>');
-        }}
-      }}
+        }
+      }
       if (visible) el.open = true;
       return visible;
-    }}
+    }
 
-    function doSearch() {{
+    function doSearch() {
       const query = searchInput.value.trim().toLowerCase();
-      if (!query) {{
+      if (!query) {
         clearSearch();
         return;
-      }}
+      }
       clearBtn.style.display = 'inline-block';
       const allRoots = Array.from(treePane.querySelectorAll(':scope > details.node'));
-      for (const root of allRoots) {{
+      for (const root of allRoots) {
         applySearch(root, query);
-      }}
+      }
       const matches = treePane.querySelectorAll('.node.search-match');
       const total = matches.length;
       countEl.textContent = total ? total + ' result' + (total !== 1 ? 's' : '') : '';
       noResults.style.display = total === 0 ? 'block' : 'none';
 
       // Select first match in detail pane
-      if (matches.length > 0) {{
+      if (matches.length > 0) {
         const firstId = matches[0].dataset.nodeId;
         if (firstId) selectNode(firstId);
-      }}
-    }}
+      }
+    }
 
-    function clearSearch() {{
+    function clearSearch() {
       searchInput.value = '';
       clearBtn.style.display = 'none';
       countEl.textContent = '';
       noResults.style.display = 'none';
-      treePane.querySelectorAll('details.node').forEach(el => {{
+      treePane.querySelectorAll('details.node').forEach(el => {
         el.classList.remove('search-hidden', 'search-match');
         const label = el.querySelector(':scope > summary > .node-label');
         if (label) label.innerHTML = label.textContent;
         el.open = originalOpen.get(el.id) || false;
-      }});
-    }}
+      });
+    }
 
     searchInput.addEventListener('input', doSearch);
 
     // Select first root node on load
-    if (DATA.length > 0) {{
+    if (DATA.length > 0) {
       selectNode(DATA[0].id);
-    }}
+    }
   </script>
 </body>
-</html>"""
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Visualize a business capability model from Excel.")
-    parser.add_argument("input", help="Path to the Excel file")
-    parser.add_argument("--output", default="output.html", help="Output HTML file (default: output.html)")
-    args = parser.parse_args()
-
-    df = load_data(args.input)
-    roots, _ = build_tree(df)
-    tier_colors = assign_tier_colors(roots)
-    html = render_html(roots, tier_colors, args.input)
-
-    with open(args.output, "w", encoding="utf-8") as f:
-        f.write(html)
-
-    print(f"Generated {args.output} with {len(roots)} top-level capabilities.")
-
-
-if __name__ == "__main__":
-    main()
+</html>

@@ -125,6 +125,7 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       gap: 16px;
       flex-wrap: wrap;
       flex-shrink: 0;
+      z-index: 10;
     }}
     header h1 {{
       font-size: 1.3rem;
@@ -179,118 +180,143 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       font-size: 0.8rem;
       color: #90AFCC;
     }}
-    .container {{
-      display: grid;
-      grid-template-columns: 1fr 2fr;
+    #canvas-container {{
       flex: 1;
       overflow: hidden;
-      min-height: 0;
+      position: relative;
+      cursor: grab;
     }}
-    #tree-pane {{
-      overflow-y: auto;
-      padding: 16px;
-      border-right: 1px solid #DCE8F2;
-      background: #fff;
+    #canvas-container.panning {{
+      cursor: grabbing;
     }}
-    #detail-pane {{
-      overflow-y: auto;
-      padding: 24px 32px;
-      background: #F2F4F7;
+    #tree-svg {{
+      width: 100%;
+      height: 100%;
+      display: block;
     }}
-
-    /* Tree nodes */
-    .node {{
-      margin: 2px 0;
-      padding: 0;
-      border-radius: 5px;
+    .link-path {{
+      fill: none;
+      stroke: #B0C4D8;
+      stroke-width: 1.5;
+      transition: opacity 0.3s ease;
     }}
-    .node > summary {{
+    .node-group {{
       cursor: pointer;
-      padding: 7px 10px;
-      font-weight: 600;
-      font-size: 0.9rem;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      user-select: none;
-      border-radius: 5px;
-      transition: background 0.1s;
+      transition: transform 0.4s ease, opacity 0.3s ease;
     }}
-    .node > summary:hover {{ background: #EEF5FB; }}
-    .node > summary::before {{
-      content: "\\25B6";
-      font-size: 0.6rem;
-      color: #0079C1;
-      transition: transform 0.15s;
-      flex-shrink: 0;
+    .node-rect {{
+      stroke-width: 1.5;
+      transition: stroke 0.15s, fill 0.15s;
     }}
-    .node[open] > summary::before {{ transform: rotate(90deg); }}
-    .node .node {{
-      margin-left: 18px;
+    .node-group:hover .node-rect {{
+      stroke: #0079C1;
     }}
-    .node .node > summary {{
-      font-weight: 500;
-      font-size: 0.87rem;
+    .node-group.search-match .node-rect {{
+      stroke: #F0A500;
+      stroke-width: 2.5;
     }}
-    .node .node .node > summary {{
-      font-weight: 400;
-      color: #3A5570;
-      font-size: 0.84rem;
+    .node-group.search-dim {{
+      opacity: 0.25;
     }}
-    .node.active > summary {{
-      background: #D6EEFF;
+    .node-group.search-dim .link-path {{
+      opacity: 0.15;
     }}
-    .node.search-hidden {{ display: none; }}
-    .node.search-match > summary {{ background: #FFF3CD; }}
+    .toggle-circle {{
+      cursor: pointer;
+      fill: #fff;
+      stroke: #0079C1;
+      stroke-width: 1.5;
+    }}
+    .toggle-circle:hover {{
+      fill: #EEF5FB;
+    }}
+    .toggle-text {{
+      fill: #0079C1;
+      font-size: 14px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }}
 
-    /* Detail card */
-    .detail-card {{
+    /* Detail popup */
+    #detail-popup {{
+      position: fixed;
+      z-index: 100;
+      max-width: 380px;
+      min-width: 280px;
       background: #fff;
       border-radius: 10px;
-      padding: 28px 32px;
-      box-shadow: 0 2px 8px rgba(0,40,85,0.08);
+      padding: 20px 24px;
+      box-shadow: 0 8px 32px rgba(0,40,85,0.18), 0 2px 8px rgba(0,40,85,0.08);
+      display: none;
+      max-height: 80vh;
+      overflow-y: auto;
     }}
-    .detail-card h2 {{
+    #detail-popup.visible {{
+      display: block;
+    }}
+    #detail-popup h2 {{
       margin: 0 0 4px;
-      font-size: 1.35rem;
+      font-size: 1.15rem;
       color: #002855;
+      padding-right: 28px;
+    }}
+    .popup-close {{
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: #F2F4F7;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 24px;
+      text-align: center;
+      cursor: pointer;
+      color: #5E7A96;
+      padding: 0;
+    }}
+    .popup-close:hover {{
+      background: #DCE8F2;
     }}
     .detail-badge {{
       display: inline-block;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
       background: #DDE9F5;
       color: #0079C1;
-      padding: 3px 10px;
+      padding: 2px 9px;
       border-radius: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }}
     .detail-tier {{
       display: inline-block;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
-      padding: 3px 10px;
+      padding: 2px 9px;
       border-radius: 10px;
-      margin-left: 6px;
-      margin-bottom: 16px;
+      margin-left: 5px;
+      margin-bottom: 12px;
       color: #fff;
     }}
     .detail-section {{
-      margin-top: 16px;
+      margin-top: 12px;
     }}
     .detail-section h3 {{
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: #7A96B0;
-      margin: 0 0 6px;
+      margin: 0 0 4px;
     }}
     .detail-section p {{
       margin: 0;
-      font-size: 0.92rem;
+      font-size: 0.88rem;
       color: #3A5570;
-      line-height: 1.55;
+      line-height: 1.5;
     }}
     .children-list {{
       list-style: none;
@@ -298,44 +324,15 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
       margin: 0;
     }}
     .children-list li {{
-      padding: 5px 0;
+      padding: 3px 0;
     }}
     .children-list a {{
       color: #0079C1;
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       cursor: pointer;
     }}
     .children-list a:hover {{ text-decoration: underline; }}
-    .empty-state {{
-      color: #7A96B0;
-      font-size: 0.95rem;
-      text-align: center;
-      padding: 80px 20px;
-    }}
-    .no-results {{
-      color: #7A96B0;
-      font-size: 0.9rem;
-      padding: 12px 4px;
-      display: none;
-    }}
-
-    @media (max-width: 768px) {{
-      .container {{
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr 1fr;
-      }}
-      #tree-pane {{
-        border-right: none;
-        border-bottom: 1px solid #DCE8F2;
-      }}
-      .toolbar {{
-        width: 100%;
-      }}
-      #search {{
-        flex: 1;
-      }}
-    }}
   </style>
 </head>
 <body>
@@ -344,252 +341,596 @@ def render_html(roots: list, tier_colors: dict, source_file: str) -> str:
     <p class="subtitle">Source: {safe_source}</p>
     <div class="toolbar">
       <input id="search" type="search" placeholder="Search capabilities\u2026" autocomplete="off" />
-      <button id="search-clear" onclick="clearSearch()">Clear</button>
+      <button id="search-clear">Clear</button>
       <span id="search-count"></span>
-      <button onclick="expandAll()">Expand All</button>
-      <button onclick="collapseAll()">Collapse All</button>
+      <button id="btn-expand-all">Expand All</button>
+      <button id="btn-collapse-all">Collapse All</button>
+      <button id="btn-reset-view">Reset View</button>
     </div>
   </header>
 
-  <div class="container">
-    <div id="tree-pane"></div>
-    <div id="detail-pane">
-      <div class="empty-state">Click a node in the tree to view details</div>
-    </div>
+  <div id="canvas-container">
+    <svg id="tree-svg">
+      <g id="viewport">
+        <g id="links-layer"></g>
+        <g id="nodes-layer"></g>
+      </g>
+    </svg>
   </div>
-  <div class="no-results" id="no-results">No capabilities matched your search.</div>
+
+  <div id="detail-popup">
+    <button class="popup-close" id="popup-close">&times;</button>
+    <div id="popup-content"></div>
+  </div>
 
   <script>
-    const DATA = {json_blob};
+    var DATA = {json_blob};
 
-    // Build a flat lookup: id -> node data
-    const nodeMap = {{}};
-    function indexNodes(nodes) {{
-      for (const n of nodes) {{
+    /* ---- Constants ---- */
+    var LEVEL_WIDTH = 280;
+    var NODE_W = 200;
+    var NODE_H = 36;
+    var NODE_SPACING = 52;
+    var TOGGLE_R = 9;
+    var PAD_TOP = 40;
+    var PAD_LEFT = 40;
+
+    /* ---- Flat index & parent map ---- */
+    var nodeMap = {{}};
+    var parentMap = {{}};
+    function indexNodes(nodes, pid) {{
+      for (var i = 0; i < nodes.length; i++) {{
+        var n = nodes[i];
         nodeMap[n.id] = n;
-        indexNodes(n.children);
+        if (pid) parentMap[n.id] = pid;
+        n._collapsed = true;
+        n._x = 0;
+        n._y = 0;
+        n._visible = true;
+        indexNodes(n.children, n.id);
       }}
     }}
-    indexNodes(DATA);
+    indexNodes(DATA, null);
 
-    // Find the tier color for any node by walking up
+    /* L1 roots expanded by default */
+    for (var i = 0; i < DATA.length; i++) {{
+      DATA[i]._collapsed = false;
+    }}
+
+    /* Tier color lookup */
     function getTierColor(node) {{
       if (node.color) return node.color;
-      // Walk all roots to find the color in the ancestor chain
-      for (const root of DATA) {{
-        if (findInTree(root, node.id)) return root.color;
+      var id = node.id;
+      while (parentMap[id]) {{
+        id = parentMap[id];
       }}
-      return "";
-    }}
-    function findInTree(node, id) {{
-      if (node.id === id) return true;
-      return node.children.some(c => findInTree(c, id));
+      return nodeMap[id] ? nodeMap[id].color : "";
     }}
 
-    const treePane = document.getElementById('tree-pane');
-    const detailPane = document.getElementById('detail-pane');
-    const searchInput = document.getElementById('search');
-    const clearBtn = document.getElementById('search-clear');
-    const countEl = document.getElementById('search-count');
-    const noResults = document.getElementById('no-results');
+    /* ---- SVG references ---- */
+    var svgEl = document.getElementById("tree-svg");
+    var viewport = document.getElementById("viewport");
+    var linksLayer = document.getElementById("links-layer");
+    var nodesLayer = document.getElementById("nodes-layer");
+    var container = document.getElementById("canvas-container");
+    var popup = document.getElementById("detail-popup");
+    var popupContent = document.getElementById("popup-content");
+    var popupClose = document.getElementById("popup-close");
+    var searchInput = document.getElementById("search");
+    var searchClear = document.getElementById("search-clear");
+    var searchCount = document.getElementById("search-count");
 
-    let activeId = null;
+    /* ---- Pan / Zoom state ---- */
+    var panX = PAD_LEFT;
+    var panY = PAD_TOP;
+    var zoom = 1;
+    var isPanning = false;
+    var panStartX = 0;
+    var panStartY = 0;
+    var panStartPanX = 0;
+    var panStartPanY = 0;
 
-    // --- Render tree ---
-    function renderTree(nodes, container, isRoot) {{
-      for (const node of nodes) {{
-        const details = document.createElement('details');
-        details.className = 'node';
-        details.id = 'tree-' + node.id;
-        details.dataset.name = node.name;
-        details.dataset.nodeId = node.id;
-        if (isRoot) {{
-          details.open = true;
-          if (node.color) {{
-            details.style.borderLeft = '4px solid ' + node.color;
-          }}
+    function applyTransform() {{
+      viewport.setAttribute("transform",
+        "translate(" + panX + "," + panY + ") scale(" + zoom + ")");
+    }}
+    applyTransform();
+
+    /* ---- Layout algorithm ---- */
+    var leafY = 0;
+
+    function layoutNode(node, depth) {{
+      node._x = depth * LEVEL_WIDTH;
+      node._visible = true;
+
+      if (node.children.length === 0 || node._collapsed) {{
+        node._y = leafY;
+        leafY += NODE_SPACING;
+        /* Hide collapsed children */
+        if (node._collapsed) {{
+          hideSubtree(node);
         }}
-        const summary = document.createElement('summary');
-        const label = document.createElement('span');
-        label.className = 'node-label';
-        label.textContent = node.name;
-        summary.appendChild(label);
-        summary.addEventListener('click', function(e) {{
-          // Don't prevent the default toggle, just select the node
-          selectNode(node.id);
-        }});
-        details.appendChild(summary);
-        if (node.children.length) {{
-          renderTree(node.children, details, false);
-        }}
-        container.appendChild(details);
+        return;
+      }}
+
+      for (var i = 0; i < node.children.length; i++) {{
+        layoutNode(node.children[i], depth + 1);
+      }}
+
+      /* Parent centers over children */
+      var firstY = node.children[0]._y;
+      var lastY = node.children[node.children.length - 1]._y;
+      node._y = (firstY + lastY) / 2;
+    }}
+
+    function hideSubtree(node) {{
+      for (var i = 0; i < node.children.length; i++) {{
+        node.children[i]._visible = false;
+        hideSubtree(node.children[i]);
       }}
     }}
 
-    renderTree(DATA, treePane, true);
-
-    // --- Select node ---
-    function selectNode(id) {{
-      // Remove previous active
-      const prev = treePane.querySelector('.node.active');
-      if (prev) prev.classList.remove('active');
-
-      activeId = id;
-      const treeEl = document.getElementById('tree-' + id);
-      if (treeEl) {{
-        treeEl.classList.add('active');
+    function doLayout() {{
+      leafY = 0;
+      for (var i = 0; i < DATA.length; i++) {{
+        layoutNode(DATA[i], 0);
       }}
-
-      const node = nodeMap[id];
-      if (!node) return;
-
-      const tierColor = getTierColor(node);
-      const tierName = node.tier || '';
-
-      let html = '<div class="detail-card">';
-      html += '<h2>' + escapeHtml(node.name) + '</h2>';
-
-      // Badges row
-      if (node.type || tierName) {{
-        if (node.type) {{
-          html += '<span class="detail-badge">' + escapeHtml(node.type) + '</span>';
-        }}
-        if (tierName) {{
-          html += '<span class="detail-tier" style="background:' + (tierColor || '#5E7A96') + '">' + escapeHtml(tierName) + '</span>';
-        }}
-      }}
-
-      if (node.desc) {{
-        html += '<div class="detail-section"><h3>Description</h3><p>' + escapeHtml(node.desc) + '</p></div>';
-      }}
-      if (node.source) {{
-        html += '<div class="detail-section"><h3>Source</h3><p>' + escapeHtml(node.source) + '</p></div>';
-      }}
-      if (node.children.length) {{
-        html += '<div class="detail-section"><h3>Children (' + node.children.length + ')</h3><ul class="children-list">';
-        for (const child of node.children) {{
-          html += '<li><a class="child-link" data-id="' + child.id + '">' + escapeHtml(child.name) + '</a></li>';
-        }}
-        html += '</ul></div>';
-      }}
-      html += '</div>';
-      detailPane.innerHTML = html;
-      // Bind child link clicks via delegation
-      detailPane.querySelectorAll('.child-link').forEach(function(a) {{
-        a.addEventListener('click', function() {{
-          navigateToNode(a.dataset.id);
-        }});
-      }});
     }}
+
+    /* ---- Rendering ---- */
+    var svgNodes = {{}};  /* id -> g element */
+    var svgLinks = {{}};  /* childId -> path element */
 
     function escapeHtml(s) {{
-      const div = document.createElement('div');
+      var div = document.createElement("div");
       div.textContent = s;
       return div.innerHTML;
     }}
 
-    // --- Navigate to node (from detail pane child links) ---
-    function navigateToNode(id) {{
-      // Expand parent chain
-      const treeEl = document.getElementById('tree-' + id);
-      if (treeEl) {{
-        let parent = treeEl.parentElement;
-        while (parent && parent !== treePane) {{
-          if (parent.tagName === 'DETAILS') {{
-            parent.open = true;
-          }}
-          parent = parent.parentElement;
+    function truncateText(text, maxLen) {{
+      if (text.length <= maxLen) return text;
+      return text.substring(0, maxLen - 1) + "\u2026";
+    }}
+
+    function createNodeEl(node, isRoot) {{
+      var ns = "http://www.w3.org/2000/svg";
+      var g = document.createElementNS(ns, "g");
+      g.setAttribute("class", "node-group");
+      g.setAttribute("data-id", node.id);
+
+      var rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("class", "node-rect");
+      rect.setAttribute("width", NODE_W);
+      rect.setAttribute("height", NODE_H);
+      rect.setAttribute("rx", 6);
+      rect.setAttribute("ry", 6);
+      if (isRoot && node.color) {{
+        rect.setAttribute("fill", node.color);
+        rect.setAttribute("stroke", node.color);
+      }} else {{
+        rect.setAttribute("fill", "#fff");
+        rect.setAttribute("stroke", "#B0C4D8");
+      }}
+      g.appendChild(rect);
+
+      /* Text via foreignObject for ellipsis */
+      var fo = document.createElementNS(ns, "foreignObject");
+      fo.setAttribute("x", 10);
+      fo.setAttribute("y", 2);
+      fo.setAttribute("width", NODE_W - 20 - (node.children.length > 0 ? 20 : 0));
+      fo.setAttribute("height", NODE_H - 4);
+      var textDiv = document.createElement("div");
+      textDiv.style.cssText = "font-size:13px;font-weight:" + (isRoot ? "700" : "500") +
+        ";color:" + (isRoot && node.color ? "#fff" : "#002855") +
+        ";line-height:" + NODE_H + "px;height:" + NODE_H +
+        "px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;";
+      textDiv.textContent = node.name;
+      fo.appendChild(textDiv);
+      g.appendChild(fo);
+
+      /* Toggle indicator */
+      if (node.children.length > 0) {{
+        var tc = document.createElementNS(ns, "circle");
+        tc.setAttribute("class", "toggle-circle");
+        tc.setAttribute("cx", NODE_W + TOGGLE_R + 4);
+        tc.setAttribute("cy", NODE_H / 2);
+        tc.setAttribute("r", TOGGLE_R);
+        g.appendChild(tc);
+
+        var tt = document.createElementNS(ns, "text");
+        tt.setAttribute("class", "toggle-text");
+        tt.setAttribute("x", NODE_W + TOGGLE_R + 4);
+        tt.setAttribute("y", NODE_H / 2);
+        tt.textContent = node._collapsed ? "+" : "\u2212";
+        g.appendChild(tt);
+
+        tc.addEventListener("click", function(e) {{
+          e.stopPropagation();
+          toggleNode(node.id);
+        }});
+        tt.addEventListener("click", function(e) {{
+          e.stopPropagation();
+          toggleNode(node.id);
+        }});
+      }}
+
+      /* Click body -> detail popup */
+      rect.addEventListener("click", function(e) {{
+        e.stopPropagation();
+        showPopup(node.id);
+      }});
+      fo.addEventListener("click", function(e) {{
+        e.stopPropagation();
+        showPopup(node.id);
+      }});
+
+      return g;
+    }}
+
+    function buildSvgElements(nodes, isRoot) {{
+      for (var i = 0; i < nodes.length; i++) {{
+        var node = nodes[i];
+        var g = createNodeEl(node, isRoot);
+        nodesLayer.appendChild(g);
+        svgNodes[node.id] = g;
+
+        /* Create link from parent to this node */
+        if (parentMap[node.id]) {{
+          var ns = "http://www.w3.org/2000/svg";
+          var path = document.createElementNS(ns, "path");
+          path.setAttribute("class", "link-path");
+          linksLayer.appendChild(path);
+          svgLinks[node.id] = path;
         }}
-        selectNode(id);
-        treeEl.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+
+        if (node.children.length > 0) {{
+          buildSvgElements(node.children, false);
+        }}
       }}
     }}
 
-    // --- Expand / Collapse ---
-    function expandAll() {{
-      treePane.querySelectorAll('details.node').forEach(el => el.open = true);
-    }}
-    function collapseAll() {{
-      treePane.querySelectorAll('details.node').forEach(el => {{
-        // Keep roots open if they are direct children of tree-pane
-        el.open = el.parentElement === treePane;
-      }});
+    function updatePositions() {{
+      var allIds = Object.keys(svgNodes);
+      for (var k = 0; k < allIds.length; k++) {{
+        var id = allIds[k];
+        var node = nodeMap[id];
+        var g = svgNodes[id];
+
+        if (!node._visible) {{
+          g.style.opacity = "0";
+          g.style.pointerEvents = "none";
+          g.setAttribute("transform", "translate(" + node._x + "," + node._y + ")");
+        }} else {{
+          g.style.opacity = "";
+          g.style.pointerEvents = "";
+          g.setAttribute("transform", "translate(" + node._x + "," + node._y + ")");
+        }}
+
+        /* Update toggle text */
+        var tt = g.querySelector(".toggle-text");
+        if (tt) {{
+          tt.textContent = node._collapsed ? "+" : "\u2212";
+        }}
+      }}
+
+      /* Update links */
+      var linkIds = Object.keys(svgLinks);
+      for (var k = 0; k < linkIds.length; k++) {{
+        var childId = linkIds[k];
+        var child = nodeMap[childId];
+        var pid = parentMap[childId];
+        var parent = nodeMap[pid];
+        var path = svgLinks[childId];
+
+        if (!child._visible) {{
+          path.style.opacity = "0";
+          continue;
+        }}
+        path.style.opacity = "";
+
+        var x1 = parent._x + NODE_W + TOGGLE_R * 2 + 8;
+        var y1 = parent._y + NODE_H / 2;
+        var x2 = child._x;
+        var y2 = child._y + NODE_H / 2;
+        var cpx = (x1 + x2) / 2;
+        path.setAttribute("d",
+          "M" + x1 + "," + y1 +
+          " C" + cpx + "," + y1 +
+          " " + cpx + "," + y2 +
+          " " + x2 + "," + y2);
+      }}
     }}
 
-    // --- Search ---
-    // Store original open state
-    const originalOpen = new Map();
-    treePane.querySelectorAll('details.node').forEach(el => {{
-      originalOpen.set(el.id, el.open);
+    /* ---- Expand / Collapse ---- */
+    function toggleNode(id) {{
+      var node = nodeMap[id];
+      if (!node || node.children.length === 0) return;
+      node._collapsed = !node._collapsed;
+      hidePopup();
+      doLayout();
+      updatePositions();
+    }}
+
+    function expandAll() {{
+      var ids = Object.keys(nodeMap);
+      for (var i = 0; i < ids.length; i++) {{
+        nodeMap[ids[i]]._collapsed = false;
+      }}
+      hidePopup();
+      doLayout();
+      updatePositions();
+    }}
+
+    function collapseAll() {{
+      var ids = Object.keys(nodeMap);
+      for (var i = 0; i < ids.length; i++) {{
+        var n = nodeMap[ids[i]];
+        /* Roots stay expanded, everything else collapses */
+        if (parentMap[ids[i]]) {{
+          n._collapsed = true;
+        }} else {{
+          n._collapsed = false;
+        }}
+      }}
+      hidePopup();
+      doLayout();
+      updatePositions();
+    }}
+
+    /* ---- Detail Popup ---- */
+    var activePopupId = null;
+
+    function showPopup(id) {{
+      var node = nodeMap[id];
+      if (!node) return;
+      activePopupId = id;
+
+      var tierColor = getTierColor(node);
+      var tierName = node.tier || "";
+
+      var h = "<h2>" + escapeHtml(node.name) + "</h2>";
+      if (node.type || tierName) {{
+        if (node.type) {{
+          h += '<span class="detail-badge">' + escapeHtml(node.type) + "</span>";
+        }}
+        if (tierName) {{
+          h += '<span class="detail-tier" style="background:' + (tierColor || "#5E7A96") + '">' + escapeHtml(tierName) + "</span>";
+        }}
+      }}
+      if (node.desc) {{
+        h += '<div class="detail-section"><h3>Description</h3><p>' + escapeHtml(node.desc) + "</p></div>";
+      }}
+      if (node.source) {{
+        h += '<div class="detail-section"><h3>Source</h3><p>' + escapeHtml(node.source) + "</p></div>";
+      }}
+      if (node.children.length) {{
+        h += '<div class="detail-section"><h3>Children (' + node.children.length + ')</h3><ul class="children-list">';
+        for (var i = 0; i < node.children.length; i++) {{
+          var child = node.children[i];
+          h += '<li><a class="child-link" data-id="' + child.id + '">' + escapeHtml(child.name) + "</a></li>";
+        }}
+        h += "</ul></div>";
+      }}
+
+      popupContent.innerHTML = h;
+
+      /* Bind child links */
+      var links = popupContent.querySelectorAll(".child-link");
+      for (var i = 0; i < links.length; i++) {{
+        (function(a) {{
+          a.addEventListener("click", function() {{
+            var cid = a.getAttribute("data-id");
+            /* Expand to show child */
+            node._collapsed = false;
+            doLayout();
+            updatePositions();
+            showPopup(cid);
+          }});
+        }})(links[i]);
+      }}
+
+      /* Position popup near node */
+      var svgRect = svgEl.getBoundingClientRect();
+      var screenX = (node._x + NODE_W + 30) * zoom + panX + svgRect.left;
+      var screenY = node._y * zoom + panY + svgRect.top;
+
+      /* Keep within viewport */
+      var popW = 380;
+      var popH = 300;
+      if (screenX + popW > window.innerWidth - 20) {{
+        screenX = (node._x - popW - 10) * zoom + panX + svgRect.left;
+        if (screenX < 20) screenX = 20;
+      }}
+      if (screenY + popH > window.innerHeight - 20) {{
+        screenY = window.innerHeight - popH - 20;
+      }}
+      if (screenY < svgRect.top + 10) {{
+        screenY = svgRect.top + 10;
+      }}
+
+      popup.style.left = screenX + "px";
+      popup.style.top = screenY + "px";
+      popup.classList.add("visible");
+    }}
+
+    function hidePopup() {{
+      popup.classList.remove("visible");
+      activePopupId = null;
+    }}
+
+    popupClose.addEventListener("click", function(e) {{
+      e.stopPropagation();
+      hidePopup();
     }});
 
-    function applySearch(el, query) {{
-      const name = (el.dataset.name || '').toLowerCase();
-      const selfMatch = name.includes(query);
-      const directChildren = Array.from(el.children).filter(c => c.tagName === 'DETAILS');
-      let childMatch = false;
-      for (const child of directChildren) {{
-        if (applySearch(child, query)) childMatch = true;
+    /* ---- Pan ---- */
+    container.addEventListener("mousedown", function(e) {{
+      if (e.target.closest(".node-group") || e.target.closest("#detail-popup")) return;
+      isPanning = true;
+      panStartX = e.clientX;
+      panStartY = e.clientY;
+      panStartPanX = panX;
+      panStartPanY = panY;
+      container.classList.add("panning");
+      hidePopup();
+    }});
+
+    window.addEventListener("mousemove", function(e) {{
+      if (!isPanning) return;
+      panX = panStartPanX + (e.clientX - panStartX);
+      panY = panStartPanY + (e.clientY - panStartY);
+      applyTransform();
+    }});
+
+    window.addEventListener("mouseup", function() {{
+      isPanning = false;
+      container.classList.remove("panning");
+    }});
+
+    /* ---- Zoom ---- */
+    container.addEventListener("wheel", function(e) {{
+      e.preventDefault();
+      var rect = svgEl.getBoundingClientRect();
+      var mx = e.clientX - rect.left;
+      var my = e.clientY - rect.top;
+
+      var oldZoom = zoom;
+      var delta = e.deltaY > 0 ? 0.9 : 1.1;
+      zoom = Math.min(3.0, Math.max(0.1, zoom * delta));
+
+      /* Zoom toward cursor */
+      panX = mx - (mx - panX) * (zoom / oldZoom);
+      panY = my - (my - panY) * (zoom / oldZoom);
+
+      applyTransform();
+      hidePopup();
+    }}, {{ passive: false }});
+
+    /* Click SVG background to dismiss popup */
+    svgEl.addEventListener("click", function(e) {{
+      if (!e.target.closest(".node-group")) {{
+        hidePopup();
       }}
-      const visible = selfMatch || childMatch;
-      el.classList.toggle('search-hidden', !visible);
-      el.classList.toggle('search-match', selfMatch);
-      // Reset label
-      const label = el.querySelector(':scope > summary > .node-label');
-      if (label) {{
-        label.innerHTML = label.textContent;
-        if (selfMatch) {{
-          const text = label.textContent;
-          const re = new RegExp('(' + query.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&') + ')', 'gi');
-          label.innerHTML = text.replace(re, '<mark>$1</mark>');
-        }}
-      }}
-      if (visible) el.open = true;
-      return visible;
+    }});
+
+    /* ---- Reset View ---- */
+    function resetView() {{
+      panX = PAD_LEFT;
+      panY = PAD_TOP;
+      zoom = 1;
+      applyTransform();
+      hidePopup();
     }}
 
+    /* ---- Search ---- */
+    var searchActive = false;
+
     function doSearch() {{
-      const query = searchInput.value.trim().toLowerCase();
+      var query = searchInput.value.trim().toLowerCase();
       if (!query) {{
         clearSearch();
         return;
       }}
-      clearBtn.style.display = 'inline-block';
-      const allRoots = Array.from(treePane.querySelectorAll(':scope > details.node'));
-      for (const root of allRoots) {{
-        applySearch(root, query);
-      }}
-      const matches = treePane.querySelectorAll('.node.search-match');
-      const total = matches.length;
-      countEl.textContent = total ? total + ' result' + (total !== 1 ? 's' : '') : '';
-      noResults.style.display = total === 0 ? 'block' : 'none';
+      searchActive = true;
+      searchClear.style.display = "inline-block";
 
-      // Select first match in detail pane
-      if (matches.length > 0) {{
-        const firstId = matches[0].dataset.nodeId;
-        if (firstId) selectNode(firstId);
+      /* Find matching ids */
+      var matchIds = {{}};
+      var ancestorIds = {{}};
+      var allIds = Object.keys(nodeMap);
+      for (var i = 0; i < allIds.length; i++) {{
+        var n = nodeMap[allIds[i]];
+        if (n.name.toLowerCase().indexOf(query) !== -1) {{
+          matchIds[allIds[i]] = true;
+          /* Walk ancestors and expand them */
+          var pid = parentMap[allIds[i]];
+          while (pid) {{
+            ancestorIds[pid] = true;
+            nodeMap[pid]._collapsed = false;
+            pid = parentMap[pid];
+          }}
+        }}
       }}
+
+      var matchCount = Object.keys(matchIds).length;
+      searchCount.textContent = matchCount ? matchCount + " result" + (matchCount !== 1 ? "s" : "") : "No results";
+
+      /* Re-layout with expanded ancestors */
+      doLayout();
+      updatePositions();
+
+      /* Apply visual styling */
+      for (var i = 0; i < allIds.length; i++) {{
+        var g = svgNodes[allIds[i]];
+        if (!g) continue;
+        if (matchIds[allIds[i]]) {{
+          g.classList.add("search-match");
+          g.classList.remove("search-dim");
+        }} else if (ancestorIds[allIds[i]]) {{
+          g.classList.remove("search-match");
+          g.classList.remove("search-dim");
+        }} else {{
+          g.classList.remove("search-match");
+          g.classList.add("search-dim");
+        }}
+      }}
+
+      /* Dim non-relevant links */
+      var linkChildIds = Object.keys(svgLinks);
+      for (var i = 0; i < linkChildIds.length; i++) {{
+        var cid = linkChildIds[i];
+        var p = svgLinks[cid];
+        if (matchIds[cid] || ancestorIds[cid] || matchIds[parentMap[cid]] || ancestorIds[parentMap[cid]]) {{
+          p.classList.remove("search-dim");
+        }} else {{
+          p.classList.add("search-dim");
+        }}
+      }}
+
+      /* Pan to first match */
+      var firstMatchId = Object.keys(matchIds)[0];
+      if (firstMatchId) {{
+        var n = nodeMap[firstMatchId];
+        var svgRect = svgEl.getBoundingClientRect();
+        panX = svgRect.width / 2 - n._x * zoom;
+        panY = svgRect.height / 2 - n._y * zoom;
+        applyTransform();
+      }}
+
+      hidePopup();
     }}
 
     function clearSearch() {{
-      searchInput.value = '';
-      clearBtn.style.display = 'none';
-      countEl.textContent = '';
-      noResults.style.display = 'none';
-      treePane.querySelectorAll('details.node').forEach(el => {{
-        el.classList.remove('search-hidden', 'search-match');
-        const label = el.querySelector(':scope > summary > .node-label');
-        if (label) label.innerHTML = label.textContent;
-        el.open = originalOpen.get(el.id) || false;
-      }});
+      searchInput.value = "";
+      searchClear.style.display = "none";
+      searchCount.textContent = "";
+      searchActive = false;
+
+      /* Remove all search classes */
+      var allIds = Object.keys(svgNodes);
+      for (var i = 0; i < allIds.length; i++) {{
+        svgNodes[allIds[i]].classList.remove("search-match", "search-dim");
+      }}
+      var linkIds = Object.keys(svgLinks);
+      for (var i = 0; i < linkIds.length; i++) {{
+        svgLinks[linkIds[i]].classList.remove("search-dim");
+      }}
+
+      /* Reset collapse state: roots expanded, rest collapsed */
+      collapseAll();
     }}
 
-    searchInput.addEventListener('input', doSearch);
+    /* ---- Wire up buttons ---- */
+    document.getElementById("btn-expand-all").addEventListener("click", expandAll);
+    document.getElementById("btn-collapse-all").addEventListener("click", collapseAll);
+    document.getElementById("btn-reset-view").addEventListener("click", resetView);
+    searchInput.addEventListener("input", doSearch);
+    searchClear.addEventListener("click", clearSearch);
 
-    // Select first root node on load
-    if (DATA.length > 0) {{
-      selectNode(DATA[0].id);
-    }}
+    /* ---- Initial render ---- */
+    buildSvgElements(DATA, true);
+    doLayout();
+    updatePositions();
   </script>
 </body>
 </html>"""
